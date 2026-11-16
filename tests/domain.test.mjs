@@ -1,0 +1,12 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {freshState,searchProducts,validateProduct,placeOrder,restoreState} from '../app/domain.ts';
+test('GYP-2 busca sin distinguir tildes y filtra categoría',()=>{assert.equal(searchProducts(freshState().products,'algodon','Todos').length,2);assert.equal(searchProducts(freshState().products,'','Casacas').length,2)});
+test('GYP-2 filtro sin coincidencias devuelve vacío',()=>assert.equal(searchProducts(freshState().products,'inexistente','Todos').length,0));
+test('GYP-3 acepta producto válido',()=>assert.doesNotThrow(()=>validateProduct('Polo de prueba',29.9,10,'Polos')));
+test('GYP-3 rechaza nombre precio stock y categoría inválidos',()=>{assert.throws(()=>validateProduct('ab',20,2,'Polos'));for(const v of [0,-1,NaN,1.123])assert.throws(()=>validateProduct('Polo',v,2,'Polos'));for(const v of [0,1.5,1000])assert.throws(()=>validateProduct('Polo',20,v,'Polos'));assert.throws(()=>validateProduct('Polo',20,2,'Otros'))});
+test('GYP-4 pedido calcula total, reduce stock y conserva entrada',()=>{const s=freshState(),n=placeOrder(s,'p1',3,'Cliente ficticio','o1','2026-11-16T23:00:00Z');assert.equal(n.orders[0].total,89.7);assert.equal(n.products[0].stock,21);assert.equal(s.products[0].stock,24);assert.equal(s.orders.length,0)});
+test('GYP-4 rechaza exceso de stock y cantidades inválidas',()=>{for(const q of [0,-1,1.5,25])assert.throws(()=>placeOrder(freshState(),'p1',q,'Cliente','o','fecha'))});
+test('GYP-4 rechaza producto inexistente y nombre inválido',()=>{assert.throws(()=>placeOrder(freshState(),'no',1,'Cliente','o','fecha'));assert.throws(()=>placeOrder(freshState(),'p1',1,'','o','fecha'))});
+test('GYP-4 restaura catálogo y pedidos tras serializar',()=>{const s=placeOrder(freshState(),'p1',1,'Cliente','o','2026-11-16T23:00:00Z');assert.deepEqual(restoreState(JSON.stringify(s)),s)});
+test('GYP-5 recupera inicial y rechaza estado corrupto',()=>{assert.equal(restoreState(null).products.length,6);assert.throws(()=>restoreState('{'));assert.throws(()=>restoreState('{"version":2}'));assert.throws(()=>restoreState(JSON.stringify({...freshState(),products:[{id:'x'}]})))});
